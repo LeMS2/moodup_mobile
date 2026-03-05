@@ -1,5 +1,13 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, Linking, ActivityIndicator } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  Pressable,
+  StyleSheet,
+  Linking,
+  ActivityIndicator,
+} from "react-native";
 import { api } from "@/src/services/api";
 import { useRouter } from "expo-router";
 
@@ -8,54 +16,90 @@ type Mood = {
   level: number;
 };
 
-type Item = { title: string; desc: string; url?: string };
-
-const EXERCICIOS: Item[] = [
-  { title: "Respiração 4-7-8", desc: "Inspire 4s, segure 7s, solte 8s — repita 4 vezes." },
-  { title: "Grounding 5-4-3-2-1", desc: "5 coisas que vê, 4 que sente, 3 que ouve, 2 que cheira, 1 que prova." },
-];
-
-const VIDEOS: Item[] = [
-  { title: "Mindfulness para iniciantes", desc: "Prática leve para atenção plena.", url: "https://www.youtube.com/results?search_query=mindfulness+iniciante" },
-];
-
-const LIVROS: Item[] = [
-  { title: "Inteligência Emocional (Daniel Goleman)", desc: "Base clássica sobre emoções e autocontrole." },
-];
+type Resource = {
+  id: number;
+  type: "video" | "musica" | "livro" | "exercicio";
+  title: string;
+  description?: string | null;
+  url?: string | null;
+  author?: string | null;
+  duration_minutes?: number | null;
+  tags?: string[] | null;
+};
 
 export default function AjudaScreen() {
   const router = useRouter();
+
   const [lastMood, setLastMood] = useState<Mood | null>(null);
+  const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchLastMood() {
+    async function load() {
       try {
-        const res = await api.get("/moods?per_page=1");
-        const mood = res.data?.data?.[0];
-        setLastMood(mood ?? null);
-      } catch (e) {
-        console.log("Erro ao buscar mood:", e);
+        // 1) último mood
+        const moodsRes = await api.get("/moods?per_page=1");
+        const mood = moodsRes.data?.data?.[0] ?? null;
+        setLastMood(mood);
+
+        // 2) recursos do back (paginado)
+        const resRes = await api.get("/resources?per_page=50");
+        const list: Resource[] = resRes.data?.data ?? [];
+        setResources(list);
+      } catch (e: any) {
+        console.log("Erro Ajuda:", e?.response?.status, e?.response?.data, e?.message);
       } finally {
         setLoading(false);
       }
     }
 
-    fetchLastMood();
+    load();
   }, []);
 
-  function renderSection(title: string, items: Item[]) {
+  const level = lastMood?.level ?? 3;
+
+  const byType = useMemo(() => {
+    const map = {
+      exercicio: [] as Resource[],
+      video: [] as Resource[],
+      musica: [] as Resource[],
+      livro: [] as Resource[],
+    };
+
+    for (const r of resources) {
+      if (r?.type && map[r.type]) map[r.type].push(r);
+    }
+
+    return map;
+  }, [resources]);
+
+  function openUrl(url?: string | null) {
+    if (!url) return;
+    Linking.openURL(url);
+  }
+
+  function renderSection(title: string, items: Resource[]) {
+    if (!items || items.length === 0) return null;
+
     return (
       <View style={{ marginTop: 20 }}>
         <Text style={s.sectionTitle}>{title}</Text>
+
         <View style={{ gap: 10, marginTop: 10 }}>
           {items.map((it) => (
-            <View key={it.title} style={s.card}>
+            <View key={String(it.id)} style={s.card}>
               <Text style={s.cardTitle}>{it.title}</Text>
-              <Text style={s.cardDesc}>{it.desc}</Text>
 
-              {it.url && (
-                <Pressable style={s.btn} onPress={() => Linking.openURL(it.url!)}>
+              {!!it.author && <Text style={s.meta}>Por: {it.author}</Text>}
+
+              {!!it.duration_minutes && (
+                <Text style={s.meta}>Duração: {it.duration_minutes} min</Text>
+              )}
+
+              {!!it.description && <Text style={s.cardDesc}>{it.description}</Text>}
+
+              {!!it.url && (
+                <Pressable style={s.btn} onPress={() => openUrl(it.url)}>
                   <Text style={s.btnText}>Abrir</Text>
                 </Pressable>
               )}
@@ -74,38 +118,58 @@ export default function AjudaScreen() {
     );
   }
 
-  const level = lastMood?.level ?? 3;
-
   return (
     <ScrollView style={s.container} contentContainerStyle={{ padding: 16, paddingBottom: 30 }}>
       <Text style={s.title}>Auxílio Personalizado</Text>
 
+      {/* ALERTA: nível baixo */}
       {level <= 2 && (
         <>
           <Text style={s.alert}>
             Percebemos que seu último registro indica um momento difícil.
           </Text>
 
-          <Pressable style={s.aiBtn} onPress={() => router.push("/ai")}>
+          <Pressable style={s.aiBtn} onPress={() => router.push("/(tabs)/ai" as any)}>
             <Text style={s.aiBtnText}>Conversar com a IA agora</Text>
           </Pressable>
 
-          {renderSection("Exercícios rápidos", EXERCICIOS)}
+          {/* (Opcional) botões CVV/psicóloga - você pode colocar aqui */}
+          {/*
+          <Pressable style={[s.btn, { marginTop: 10 }]} onPress={() => Linking.openURL("tel:188")}>
+            <Text style={s.btnText}>Ligar para o CVV (188)</Text>
+          </Pressable>
+          */}
+
+          {renderSection("Exercícios rápidos", byType.exercicio)}
+          {renderSection("Vídeos para acalmar", byType.video)}
+          {renderSection("Músicas para relaxar", byType.musica)}
         </>
       )}
 
+      {/* NEUTRO */}
       {level === 3 && (
         <>
-          {renderSection("Exercícios leves", EXERCICIOS)}
-          {renderSection("Vídeos recomendados", VIDEOS)}
+          {renderSection("Exercícios leves", byType.exercicio)}
+          {renderSection("Vídeos recomendados", byType.video)}
+          {renderSection("Músicas recomendadas", byType.musica)}
         </>
       )}
 
+      {/* BOM */}
       {level >= 4 && (
         <>
-          {renderSection("Desenvolvimento pessoal", LIVROS)}
-          {renderSection("Conteúdos complementares", VIDEOS)}
+          {renderSection("Desenvolvimento pessoal", byType.livro)}
+          {renderSection("Vídeos recomendados", byType.video)}
+          {renderSection("Músicas recomendadas", byType.musica)}
+          {renderSection("Exercícios opcionais", byType.exercicio)}
         </>
+      )}
+
+      {/* Se vier vazio do back */}
+      {resources.length === 0 && (
+        <Text style={[s.meta, { marginTop: 16 }]}>
+          Nenhum recurso encontrado. Verifique se o seed rodou e se a rota /resources está funcionando.
+        </Text>
       )}
     </ScrollView>
   );
@@ -117,11 +181,7 @@ const s = StyleSheet.create({
 
   title: { color: "#E5E7EB", fontSize: 24, fontWeight: "900" },
 
-  alert: {
-    color: "#facc15",
-    marginTop: 12,
-    fontWeight: "600",
-  },
+  alert: { color: "#facc15", marginTop: 12, fontWeight: "600" },
 
   sectionTitle: { color: "#E5E7EB", fontSize: 16, fontWeight: "800" },
 
@@ -134,7 +194,8 @@ const s = StyleSheet.create({
   },
 
   cardTitle: { color: "#E5E7EB", fontWeight: "900" },
-  cardDesc: { color: "#94A3B8", marginTop: 6 },
+  meta: { color: "#94A3B8", marginTop: 6, fontSize: 12 },
+  cardDesc: { color: "#94A3B8", marginTop: 8 },
 
   btn: {
     marginTop: 12,
@@ -143,7 +204,6 @@ const s = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
   },
-
   btnText: { color: "#08101a", fontWeight: "900" },
 
   aiBtn: {
@@ -153,6 +213,5 @@ const s = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
   },
-
   aiBtnText: { color: "#fff", fontWeight: "900" },
 });
