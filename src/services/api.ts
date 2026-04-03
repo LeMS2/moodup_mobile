@@ -2,7 +2,7 @@ import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export const api = axios.create({
-  baseURL: "https://moodup-v1-production.up.railway.app/api",
+  baseURL: "https://moodup-v1-3.onrender.com/api",
   headers: {
     Accept: "application/json",
     "Content-Type": "application/json",

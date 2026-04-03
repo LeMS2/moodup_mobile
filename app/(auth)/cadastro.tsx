@@ -1,13 +1,19 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
-import { Link, useRouter } from "expo-router";
+import {
+  Link,
+  useRouter,
+  useLocalSearchParams,
+  useFocusEffect,
+} from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api } from "../../src/services/api";
 
 const TOKEN_KEY = "token";
+const LOCAL_TERMS_KEY = "accepted_terms_local";
+const REGISTER_DRAFT_KEY = "register_draft";
 
 function firstLaravelError(data: any) {
-  // Laravel 422 costuma vir: { message, errors: { field: ["msg"] } }
   const errs = data?.errors;
   if (!errs || typeof errs !== "object") return null;
 
@@ -18,14 +24,34 @@ function firstLaravelError(data: any) {
 
 export default function Cadastro() {
   const router = useRouter();
+  const { fresh } = useLocalSearchParams<{ fresh?: string }>();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
+
+  useFocusEffect(
+    useCallback(() => {
+      async function prepareTermsFlag() {
+        if (fresh === "1") {
+          await AsyncStorage.removeItem(LOCAL_TERMS_KEY);
+          await AsyncStorage.removeItem(REGISTER_DRAFT_KEY);
+          setAcceptedTerms(false);
+          return;
+        }
+
+        const accepted = await AsyncStorage.getItem(LOCAL_TERMS_KEY);
+        setAcceptedTerms(accepted === "true");
+      }
+
+      prepareTermsFlag();
+    }, [fresh])
+  );
 
   async function handleCadastro() {
     setErro("");
@@ -40,7 +66,6 @@ export default function Cadastro() {
       return;
     }
 
-    // ✅ seu backend exige min:8
     if (passClean.length < 8) {
       setErro("A senha deve ter pelo menos 8 caracteres.");
       return;
@@ -48,6 +73,21 @@ export default function Cadastro() {
 
     if (passClean !== passConfClean) {
       setErro("As senhas não conferem.");
+      return;
+    }
+
+    if (!acceptedTerms) {
+      await AsyncStorage.setItem(
+        REGISTER_DRAFT_KEY,
+        JSON.stringify({
+          name: nameClean,
+          email: emailClean,
+          password: passClean,
+          password_confirmation: passConfClean,
+        })
+      );
+
+      router.push("/terms?mode=cadastro&auto=1" as any);
       return;
     }
 
@@ -59,6 +99,7 @@ export default function Cadastro() {
         email: emailClean,
         password: passClean,
         password_confirmation: passConfClean,
+        accepted_terms: true,
       });
 
       const token =
@@ -69,25 +110,19 @@ export default function Cadastro() {
 
       if (token && typeof token === "string") {
         await AsyncStorage.setItem(TOKEN_KEY, token);
+        await AsyncStorage.removeItem(LOCAL_TERMS_KEY);
+        await AsyncStorage.removeItem(REGISTER_DRAFT_KEY);
 
-        // ✅ crucial: seta o header em memória (evita race condition)
         api.defaults.headers.common.Authorization = `Bearer ${token}`;
 
-        // ✅ opcional: web às vezes precisa de um tiquinho
         await new Promise((r) => setTimeout(r, 150));
-
-        const saved = await AsyncStorage.getItem(TOKEN_KEY);
-        console.log("TOKEN SALVO (cadastro):", saved);
 
         router.replace("/(tabs)/moods" as any);
         return;
       }
 
-      // Se não veio token (não é seu caso, seu backend retorna), manda pro login
       router.replace("/(auth)/login" as any);
     } catch (e: any) {
-      console.log("ERRO CADASTRO:", e?.response?.status, e?.response?.data, e?.message);
-
       const laravelMsg = firstLaravelError(e?.response?.data);
 
       const msg =
@@ -148,6 +183,16 @@ export default function Cadastro() {
           placeholderTextColor="#6B7280"
           style={styles.input}
         />
+
+        <Link
+          href="/terms?mode=cadastro"
+          style={[
+            styles.linkCenter,
+            acceptedTerms && { color: "#2dd4bf", fontWeight: "700" },
+          ]}
+        >
+          {acceptedTerms ? "✔ Termos aceitos" : "Ler termos de uso"}
+        </Link>
 
         {erro ? <Text style={styles.errorText}>{erro}</Text> : null}
 

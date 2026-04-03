@@ -46,16 +46,23 @@ export default function Login() {
 
       await AsyncStorage.setItem(TOKEN_KEY, token);
 
-// ✅ importantíssimo: já seta no axios em memória (sem depender do AsyncStorage no 1º request)
-api.defaults.headers.common.Authorization = `Bearer ${token}`;
+      api.defaults.headers.common.Authorization = `Bearer ${token}`;
 
-// ✅ opcional: pequeno delay pra web (às vezes ajuda)
-await new Promise((r) => setTimeout(r, 150));
+      await new Promise((r) => setTimeout(r, 150));
 
-const saved = await AsyncStorage.getItem(TOKEN_KEY);
-console.log("TOKEN SALVO:", saved);
+      const saved = await AsyncStorage.getItem(TOKEN_KEY);
+      console.log("TOKEN SALVO:", saved);
 
-      router.replace("/(tabs)/moods" as any);
+      const acceptedTerms = Boolean (
+        res.data?.accepted_terms ??
+        !!res.data?.user?.accepted_terms_at
+        );
+
+      if (acceptedTerms) {
+        router.replace("/(tabs)/moods" as any);
+      } else {
+        router.replace("/terms?mode=auth" as any);
+      }
     } catch (e: any) {
       const msg =
         e?.response?.data?.message ||
