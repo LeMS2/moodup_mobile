@@ -12,7 +12,6 @@ import { api } from "@/src/services/api";
 
 const LOCAL_TERMS_KEY = "accepted_terms_local";
 const TOKEN_KEY = "token";
-const REGISTER_DRAFT_KEY = "register_draft";
 
 export default function Terms() {
   const router = useRouter();
@@ -20,41 +19,16 @@ export default function Terms() {
 
   async function aceitar() {
     try {
+      // 👉 FLUXO DE CADASTRO
       if (mode === "cadastro") {
         await AsyncStorage.setItem(LOCAL_TERMS_KEY, "true");
 
-        const draftRaw = await AsyncStorage.getItem(REGISTER_DRAFT_KEY);
-
-        if (draftRaw) {
-          const draft = JSON.parse(draftRaw);
-
-          const res = await api.post("/auth/register", {
-            ...draft,
-            accepted_terms: true,
-          });
-
-          const token =
-            res.data?.token ??
-            res.data?.access_token ??
-            res.data?.data?.token ??
-            null;
-
-          if (token && typeof token === "string") {
-            await AsyncStorage.setItem(TOKEN_KEY, token);
-            await AsyncStorage.removeItem(REGISTER_DRAFT_KEY);
-            await AsyncStorage.removeItem(LOCAL_TERMS_KEY);
-
-            api.defaults.headers.common.Authorization = `Bearer ${token}`;
-
-            router.replace("/(tabs)/moods/index" as any);
-            return;
-          }
-        }
-
-        router.replace("/(auth)/cadastro" as any);
+        // 🔥 VAI DIRETO PRO APP
+        router.replace("/(tabs)/moods" as any);
         return;
       }
 
+      // 👉 FLUXO USUÁRIO LOGADO
       const token = await AsyncStorage.getItem(TOKEN_KEY);
 
       if (!token) {
@@ -86,7 +60,7 @@ export default function Terms() {
 
   function voltar() {
     if (mode === "cadastro") {
-      router.back();
+      router.replace("/(auth)/cadastro" as any);
       return;
     }
 
@@ -108,13 +82,7 @@ export default function Terms() {
 
         <Text style={styles.text}>
           O aplicativo não realiza diagnóstico, não prescreve medicamentos e não
-          substitui acompanhamento médico, psicológico ou psiquiátrico.
-        </Text>
-
-        <Text style={styles.text}>
-          Os conteúdos, recursos de apoio, mensagens da IA e demais
-          funcionalidades possuem caráter informativo e de auxílio ao bem-estar
-          emocional.
+          substitui acompanhamento profissional.
         </Text>
 
         <Text style={styles.sectionTitle}>
@@ -125,26 +93,16 @@ export default function Terms() {
           • o aplicativo não substitui atendimento profissional;
         </Text>
         <Text style={styles.bullet}>
-          • as recomendações oferecidas são de apoio e autocuidado;
+          • as recomendações são de apoio e autocuidado;
         </Text>
         <Text style={styles.bullet}>
-          • em situações de sofrimento intenso, crise emocional ou urgência,
-          deve-se buscar ajuda especializada;
-        </Text>
-        <Text style={styles.bullet}>
-          • o sistema pode direcionar o usuário para apoio humano, como
-          psicóloga responsável e canais de acolhimento;
-        </Text>
-        <Text style={styles.bullet}>
-          • o uso do aplicativo implica concordância com esses termos.
+          • em situações críticas, deve-se buscar ajuda especializada;
         </Text>
 
         <View style={styles.warningBox}>
           <Text style={styles.warningTitle}>Importante</Text>
           <Text style={styles.warningText}>
-            Em caso de crise emocional, risco imediato ou necessidade de apoio
-            urgente, procure ajuda profissional e serviços especializados, como
-            o CVV (188).
+            Em caso de crise, procure ajuda profissional ou ligue 188 (CVV).
           </Text>
         </View>
 

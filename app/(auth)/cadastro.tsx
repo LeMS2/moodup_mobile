@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
 import {
   Link,
@@ -22,9 +22,16 @@ function firstLaravelError(data: any) {
   return firstMsg || null;
 }
 
+// 🔥 regex simples e eficiente pra email
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 export default function Cadastro() {
   const router = useRouter();
   const { fresh } = useLocalSearchParams<{ fresh?: string }>();
+
+  const alreadyTriedAutoRegister = useRef(false);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -42,27 +49,63 @@ export default function Cadastro() {
           await AsyncStorage.removeItem(LOCAL_TERMS_KEY);
           await AsyncStorage.removeItem(REGISTER_DRAFT_KEY);
           setAcceptedTerms(false);
+          alreadyTriedAutoRegister.current = false;
           return;
         }
 
         const accepted = await AsyncStorage.getItem(LOCAL_TERMS_KEY);
         setAcceptedTerms(accepted === "true");
+
+        // 🔥 AUTO CADASTRO
+        if (accepted === "true" && !alreadyTriedAutoRegister.current) {
+          const draftRaw = await AsyncStorage.getItem(REGISTER_DRAFT_KEY);
+
+          if (draftRaw) {
+            alreadyTriedAutoRegister.current = true;
+
+            const draft = JSON.parse(draftRaw);
+
+            setName(draft.name);
+            setEmail(draft.email);
+            setPassword(draft.password);
+            setPasswordConfirmation(draft.password_confirmation);
+
+            handleCadastro(draft);
+          }
+        }
       }
 
       prepareTermsFlag();
     }, [fresh])
   );
 
-  async function handleCadastro() {
+  async function handleCadastro(draftData?: any) {
     setErro("");
 
-    const nameClean = name.trim();
-    const emailClean = email.trim().toLowerCase();
-    const passClean = password.trim();
-    const passConfClean = passwordConfirmation.trim();
+    const nameClean = (draftData?.name ?? name).trim();
+    const emailClean = (draftData?.email ?? email).trim().toLowerCase();
+    const passClean = (draftData?.password ?? password).trim();
+    const passConfClean = (draftData?.password_confirmation ?? passwordConfirmation).trim();
 
-    if (!nameClean || !emailClean || !passClean || !passConfClean) {
-      setErro("Preencha nome, email, senha e confirmação.");
+    // 🔥 VALIDAÇÕES
+
+    if (!nameClean) {
+      setErro("Informe seu nome.");
+      return;
+    }
+
+    if (!emailClean) {
+      setErro("Informe seu email.");
+      return;
+    }
+
+    if (!isValidEmail(emailClean)) {
+      setErro("Email inválido.");
+      return;
+    }
+
+    if (!passClean) {
+      setErro("Informe uma senha.");
       return;
     }
 
@@ -71,12 +114,19 @@ export default function Cadastro() {
       return;
     }
 
+    if (!passConfClean) {
+      setErro("Confirme sua senha.");
+      return;
+    }
+
     if (passClean !== passConfClean) {
       setErro("As senhas não conferem.");
       return;
     }
 
-    if (!acceptedTerms) {
+    const accepted = await AsyncStorage.getItem(LOCAL_TERMS_KEY);
+
+    if (accepted !== "true") {
       await AsyncStorage.setItem(
         REGISTER_DRAFT_KEY,
         JSON.stringify({
@@ -87,7 +137,7 @@ export default function Cadastro() {
         })
       );
 
-      router.push("/terms?mode=cadastro&auto=1" as any);
+      router.push("/terms?mode=cadastro" as any);
       return;
     }
 
@@ -99,7 +149,7 @@ export default function Cadastro() {
         email: emailClean,
         password: passClean,
         password_confirmation: passConfClean,
-        accepted_terms_at: new Date().tolSOString(),
+        accepted_terms: true,
       });
 
       const token =
@@ -114,8 +164,6 @@ export default function Cadastro() {
         await AsyncStorage.removeItem(REGISTER_DRAFT_KEY);
 
         api.defaults.headers.common.Authorization = `Bearer ${token}`;
-
-        await new Promise((r) => setTimeout(r, 150));
 
         router.replace("/(tabs)/moods" as any);
         return;
@@ -197,7 +245,7 @@ export default function Cadastro() {
         {erro ? <Text style={styles.errorText}>{erro}</Text> : null}
 
         <Pressable
-          onPress={handleCadastro}
+          onPress={() => handleCadastro()}
           disabled={loading}
           style={({ pressed }) => [
             styles.button,
