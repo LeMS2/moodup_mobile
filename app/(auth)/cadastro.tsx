@@ -99,7 +99,7 @@ export default function Cadastro() {
         email: emailClean,
         password: passClean,
         password_confirmation: passConfClean,
-        accepted_terms: true,
+        accepted_terms_at: new Date().tolSOString(),
       });
 
       const token =
