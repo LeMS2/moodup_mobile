@@ -44,7 +44,7 @@ export default function Terms() {
           email: draft.email,
           password: draft.password,
           password_confirmation: draft.password_confirmation,
-          accepted_terms: true,
+          accepted_terms: 1,
         });
 
         console.log("RES REGISTER:", res.data);
