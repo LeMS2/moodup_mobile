@@ -11,6 +11,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api } from "@/src/services/api";
 import { useState } from "react";
+import { AnimatedStyle } from "react-native-reanimated";
 
 const LOCAL_TERMS_KEY = "accepted_terms_local";
 const TOKEN_KEY = "token";
@@ -104,7 +105,7 @@ export default function Terms() {
       await AsyncStorage.setItem(LOCAL_TERMS_KEY, new Date().toISOString());
 
       // ✅ redireciona para o app
-      router.replace("/(tabs)/moods");
+      router.replace("/(tabs)/moods/index" as any);
     } catch (error: any) {
       console.error("Erro ao aceitar termos:", error?.response?.data || error);
 
