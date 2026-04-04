@@ -5,30 +5,76 @@ import {
   TouchableOpacity,
   Alert,
   StyleSheet,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api } from "@/src/services/api";
+import { useState } from "react";
 
 const LOCAL_TERMS_KEY = "accepted_terms_local";
 const TOKEN_KEY = "token";
+const REGISTER_DRAFT_KEY = "register_draft";
 
 export default function Terms() {
   const router = useRouter();
   const { mode } = useLocalSearchParams<{ mode?: string }>();
 
+  const [loading, setLoading] = useState(false);
+
   async function aceitar() {
     try {
-      // 👉 FLUXO DE CADASTRO
-      if (mode === "cadastro") {
-        await AsyncStorage.setItem(LOCAL_TERMS_KEY, "true");
+      setLoading(true);
 
-        // 🔥 VAI DIRETO PRO APP
+      // 🔥 FLUXO CADASTRO DIRETO
+      if (mode === "cadastro") {
+        const draftRaw = await AsyncStorage.getItem(REGISTER_DRAFT_KEY);
+
+        if (!draftRaw) {
+          Alert.alert("Erro", "Dados do cadastro não encontrados.");
+          return;
+        }
+
+        const draft = JSON.parse(draftRaw);
+
+        console.log("DRAFT:", draft);
+
+        const res = await api.post("/auth/register", {
+          name: draft.name,
+          email: draft.email,
+          password: draft.password,
+          password_confirmation: draft.password_confirmation,
+          accepted_terms: true,
+        });
+
+        console.log("RES REGISTER:", res.data);
+
+        const token =
+          res.data?.token ??
+          res.data?.access_token ??
+          res.data?.data?.token ??
+          null;
+
+        if (!token || typeof token !== "string") {
+          Alert.alert("Erro", "Cadastro feito, mas sem token.");
+          return;
+        }
+
+        // 🔐 salva token
+        await AsyncStorage.setItem(TOKEN_KEY, token);
+
+        // 🧹 limpa dados
+        await AsyncStorage.removeItem(REGISTER_DRAFT_KEY);
+        await AsyncStorage.removeItem(LOCAL_TERMS_KEY);
+
+        // 🔥 seta no axios
+        api.defaults.headers.common.Authorization = `Bearer ${token}`;
+
         router.replace("/(tabs)/moods" as any);
         return;
       }
 
-      // 👉 FLUXO USUÁRIO LOGADO
+      // 🔐 USUÁRIO JÁ LOGADO
       const token = await AsyncStorage.getItem(TOKEN_KEY);
 
       if (!token) {
@@ -44,17 +90,30 @@ export default function Terms() {
       router.replace("/(tabs)/moods" as any);
     } catch (error: any) {
       console.log(
-        "ERRO AO ACEITAR TERMOS:",
-        error?.response?.status,
-        error?.response?.data,
-        error?.message
+        "ERRO COMPLETO:",
+        JSON.stringify(error?.response?.data, null, 2)
       );
 
-      Alert.alert(
-        "Erro",
+      // 🔥 tratamento seguro Laravel
+      let laravelError = null;
+
+      if (
+        error?.response?.data?.errors &&
+        typeof error.response.data.errors === "object"
+      ) {
+        const firstKey = Object.keys(error.response.data.errors)[0];
+        laravelError = error.response.data.errors[firstKey]?.[0];
+      }
+
+      const msg =
+        laravelError ||
         error?.response?.data?.message ||
-          "Não foi possível registrar o aceite dos termos."
-      );
+        error?.message ||
+        "Não foi possível concluir o cadastro.";
+
+      Alert.alert("Erro", msg);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -64,7 +123,7 @@ export default function Terms() {
       return;
     }
 
-    router.replace("/(auth)/welcome" as any);
+    router.replace("/(auth)/login" as any);
   }
 
   return (
@@ -106,11 +165,23 @@ export default function Terms() {
           </Text>
         </View>
 
-        <TouchableOpacity style={styles.button} onPress={aceitar}>
-          <Text style={styles.buttonText}>Aceitar e continuar</Text>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={aceitar}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Aceitar e continuar</Text>
+          )}
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.secondaryButton} onPress={voltar}>
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          onPress={voltar}
+          disabled={loading}
+        >
           <Text style={styles.secondaryButtonText}>Voltar</Text>
         </TouchableOpacity>
       </ScrollView>
