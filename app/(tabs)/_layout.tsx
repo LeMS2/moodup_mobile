@@ -1,10 +1,6 @@
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 
-import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { Tabs } from "expo-router";
 
 export default function TabsLayout() {
   return (
@@ -18,16 +14,16 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen
-        name="moods/index"
+        name="index"
         options={{
-          title: "Moods",
-          tabBarLabel: "Moods",
-          tabBarIcon: ({ color, size }) => <Ionicons name="list" color={color} size={size} />,
+          title: "Ínicio",
+          tabBarLabel: "Ínicio",
+           tabBarIcon: ({ color, size }) => <Ionicons name="storefront-outline" color={color} size={size} />,
         }}
-      />
+  />
 
       <Tabs.Screen
-        name="moods/create"
+        name="create"
         options={{
           title: "Criar Mood",
           tabBarLabel: "Criar",

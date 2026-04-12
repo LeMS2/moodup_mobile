@@ -1,368 +1,371 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Linking } from "react-native";
-import { api } from "@/src/services/api";
-import { router } from "expo-router";
+import MoodCalendar from "@/components/MoodCalendar";
+import { api } from "@/services/api";
 
-type WeeklySeriesItem = { date: string; avg_level: number | null; count: number };
-type AlertItem = { type: "critical" | "warning" | string; title: string; message: string };
-type TriggerItem = { trigger: string; count: number };
+import React, { useCallback, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Dimensions,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-type WeeklyInsights = {
-  range: { start: string; end: string };
-  series: WeeklySeriesItem[];
-  avg_level_week: number | null;
-  low_days: number;
-  trend: number | null;
-  risk_score: number | null;
-  risk_level: "baixo" | "medio" | "alto" | "desconhecido";
-  top_triggers: TriggerItem[];
-  alerts: AlertItem[];
-};
+import { BarChart } from "react-native-chart-kit";
+import Animated, { FadeInUp } from "react-native-reanimated";
+import { useFocusEffect } from "expo-router";
 
-type Resource = {
-  id?: number;
-  type?: string;
-  title?: string;
-  description?: string;
-  url?: string | null;
-  author?: string | null;
-  duration_minutes?: number | null;
-  tags?: string[] | null;
-};
+const screenWidth = Dimensions.get("window").width;
 
 export default function Dashboard() {
   const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string>("");
-  const [insights, setInsights] = useState<WeeklyInsights | null>(null);
-  const [rec, setRec] = useState<Resource | null>(null);
 
-  async function load() {
-    setErr("");
-    setLoading(true);
+  const [weekly, setWeekly] = useState<any>(null);
+  const [history, setHistory] = useState<any[]>([]);
+  const [insights, setInsights] = useState<any>(null);
 
+  const [showHistory, setShowHistory] = useState(false);
+  const [period, setPeriod] = useState<"7d" | "30d" | "all">("7d");
+
+  async function loadData() {
     try {
-      const [a, b] = await Promise.all([
+      setLoading(true);
+
+      const [w, h, i] = await Promise.all([
+        api.get("/moods/summary/weekly"),
+        api.get("/moods"),
         api.get("/moods/insights/weekly"),
-        api.get("/resources/recommendation/history"),
       ]);
 
-      setInsights(a.data);
-      setRec(b.data?.recommendation ?? null);
-    } catch (e: any) {
-      const msg =
-        e?.response?.data?.message ||
-        e?.message ||
-        "Não foi possível carregar o dashboard.";
-      setErr(msg);
+      setWeekly(w.data || null);
+
+      setHistory(
+        Array.isArray(h.data?.data)
+          ? h.data.data
+          : Array.isArray(h.data)
+          ? h.data
+          : []
+      );
+
+      setInsights(i.data || null);
+    } catch (error: any) {
+      console.log("ERRO DASH:", error?.response?.data || error.message);
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => {
-    load();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
-  const bars = useMemo(() => {
-    const s = insights?.series ?? [];
-    // max para normalizar barrinhas (1..5)
-    const max = 5;
-    return s.map((it) => {
-      const val = it.avg_level ?? 0;
-      const pct = Math.max(0, Math.min(1, val / max));
-      return { ...it, pct };
+  // 🔎 filtro por período
+  const filteredHistory = useMemo(() => {
+    const now = new Date();
+
+    return history.filter((item) => {
+      const date = new Date(item.date);
+      const diff =
+        (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24);
+
+      if (period === "7d") return diff <= 7;
+      if (period === "30d") return diff <= 30;
+      return true;
     });
-  }, [insights]);
+  }, [history, period]);
 
-  const riskBadge = useMemo(() => {
-    const level = insights?.risk_level ?? "desconhecido";
-    if (level === "alto") return { label: "ALTO", style: s.badgeHigh };
-    if (level === "medio") return { label: "MÉDIO", style: s.badgeMid };
-    if (level === "baixo") return { label: "BAIXO", style: s.badgeLow };
-    return { label: "—", style: s.badgeUnknown };
-  }, [insights]);
+  // 🔥 streak
+  function calculateStreak(data: any[]) {
+    let streak = 0;
 
-  function trendText(v: number | null | undefined) {
-    if (v === null || v === undefined) return "Sem dados suficientes";
-    if (v > 0.2) return "Melhorando ✅";
-    if (v < -0.2) return "Piorando ⚠️";
-    return "Estável";
+    const sorted = [...data].sort(
+      (a, b) =>
+        new Date(b.date).getTime() -
+        new Date(a.date).getTime()
+    );
+
+    for (let i = 0; i < sorted.length; i++) {
+      const today = new Date();
+      const date = new Date(sorted[i].date);
+
+      const diff = Math.floor(
+        (today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)
+      );
+
+      if (diff === i) streak++;
+      else break;
+    }
+
+    return streak;
   }
 
-  function safeOpen(url?: string | null) {
-    if (!url) return;
-    Linking.openURL(url);
-  }
+  const streak = calculateStreak(history);
 
-  const todayRiskIsHigh = (insights?.risk_level === "alto");
+  // 📊 estatísticas (SUBSTITUI MÉDIA)
+  const moodStats = useMemo(() => {
+    let good = 0;
+    let neutral = 0;
+    let bad = 0;
+
+    filteredHistory.forEach((m) => {
+      if (m.level >= 4) good++;
+      else if (m.level === 3) neutral++;
+      else bad++;
+    });
+
+    return { good, neutral, bad };
+  }, [filteredHistory]);
+
+  // 📊 gráfico de barras
+  const barData = {
+    labels: ["Ruim", "Neutro", "Bom"],
+    datasets: [
+      {
+        data: [
+          moodStats.bad,
+          moodStats.neutral,
+          moodStats.good,
+        ],
+      },
+    ],
+  };
+
+  // 💬 mensagem inteligente
+  const feedbackMessage = useMemo(() => {
+    if (moodStats.good > moodStats.bad)
+      return "🎉 Você teve mais dias bons essa semana!";
+    if (moodStats.bad > moodStats.good)
+      return "💙 Semana mais difícil, cuide-se.";
+    return "⚖️ Sua semana foi equilibrada.";
+  }, [moodStats]);
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#2dd4bf" />
+      </View>
+    );
+  }
 
   return (
-    <ScrollView style={s.container} contentContainerStyle={{ paddingBottom: 28 }}>
-      <Text style={s.title}>Dashboard</Text>
-      <Text style={s.subtitle}>
-        Evolução da semana • risco emocional • gatilhos • recomendação
-      </Text>
+    <ScrollView style={styles.container}>
+      <Text style={styles.title}>Dashboard emocional</Text>
 
-      {loading ? (
-        <View style={{ marginTop: 18, alignItems: "center" }}>
-          <ActivityIndicator />
-          <Text style={s.muted}>Carregando...</Text>
-        </View>
-      ) : err ? (
-        <View style={s.card}>
-          <Text style={s.cardTitle}>Erro</Text>
-          <Text style={s.muted}>{err}</Text>
-          <Pressable onPress={load} style={s.btnPrimary}>
-            <Text style={s.btnPrimaryText}>Tentar novamente</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <>
-          {/* Card risco */}
-          <View style={s.card}>
-            <View style={s.rowBetween}>
-              <Text style={s.cardTitle}>Risco da semana</Text>
-              <View style={[s.badge, riskBadge.style]}>
-                <Text style={s.badgeText}>{riskBadge.label}</Text>
-              </View>
-            </View>
+      {/* 🔘 filtro */}
+      <View style={styles.filterRow}>
+        {["7d", "30d", "all"].map((p) => (
+          <TouchableOpacity
+            key={p}
+            onPress={() => setPeriod(p as any)}
+            style={[
+              styles.filterButton,
+              period === p && styles.filterActive,
+            ]}
+          >
+            <Text style={styles.filterText}>{p}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
-            <Text style={s.muted}>
-              Score: {insights?.risk_score ?? "—"} • Média (level): {insights?.avg_level_week ?? "—"} • Dias baixos: {insights?.low_days ?? 0}
+      {/* 🔥 métricas */}
+      <View style={styles.row}>
+        <Animated.View entering={FadeInUp}>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricValue}>
+              {filteredHistory.length}
             </Text>
-
-            <Text style={[s.muted, { marginTop: 6 }]}>
-              Tendência: {trendText(insights?.trend)}
-            </Text>
-
-            {/* Se risco alto, já deixa um bloco de apoio visível */}
-            {todayRiskIsHigh && (
-              <View style={s.alertCriticalBox}>
-                <Text style={s.alertTitle}>Precisa de apoio agora?</Text>
-                <Text style={s.alertText}>
-                  Se você estiver se sentindo muito mal, conversar com alguém pode ajudar.
-                </Text>
-
-                <Pressable
-                  style={[s.btnPrimary, { marginTop: 10 }]}
-                  onPress={() => Linking.openURL("tel:188")}
-                >
-                  <Text style={s.btnPrimaryText}>Ligar para o CVV (188)</Text>
-                </Pressable>
-
-                {/* Psicóloga: pode virar rota/tela depois */}
-                <Pressable style={s.btnGhost} onPress={() => {}}>
-                  <Text style={s.btnGhostText}>Contato da psicóloga (em breve)</Text>
-                </Pressable>
-              </View>
-            )}
+            <Text style={styles.metricLabel}>Registros</Text>
           </View>
+        </Animated.View>
 
-          {/* Alertas vindos do backend */}
-          {(insights?.alerts?.length ?? 0) > 0 && (
-            <View style={s.card}>
-              <Text style={s.cardTitle}>Alertas</Text>
-              {insights!.alerts.map((a, idx) => (
-                <View
-                  key={idx}
-                  style={[s.alertBox, a.type === "critical" ? s.alertCritical : s.alertWarn]}
-                >
-                  <Text style={s.alertTitle}>{a.title}</Text>
-                  <Text style={s.alertText}>{a.message}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Gráfico simples (barrinhas) */}
-          <View style={s.card}>
-            <Text style={s.cardTitle}>Evolução emocional (7 dias)</Text>
-            <Text style={s.muted}>Média do level por dia (1 a 5)</Text>
-
-            <View style={s.chartWrap}>
-              {bars.map((b) => (
-                <View key={b.date} style={s.chartCol}>
-                  <View style={s.chartTrack}>
-                    <View style={[s.chartBar, { height: `${Math.round(b.pct * 100)}%` } as any]} />
-                  </View>
-                  <Text style={s.chartLabel}>
-                    {b.date.slice(8, 10)}
-                  </Text>
-                </View>
-              ))}
-            </View>
-
-            <Text style={[s.muted, { marginTop: 8 }]}>
-              Dica: se um dia ficou “sem barra”, é porque não teve registro naquele dia.
-            </Text>
+        <Animated.View entering={FadeInUp.delay(100)}>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricValue}>{streak}</Text>
+            <Text style={styles.metricLabel}>Streak 🔥</Text>
           </View>
+        </Animated.View>
+      </View>
 
-          {/* Top triggers */}
-          <View style={s.card}>
-            <Text style={s.cardTitle}>Gatilhos mais frequentes</Text>
-            {(insights?.top_triggers?.length ?? 0) === 0 ? (
-              <Text style={s.muted}>Sem gatilhos suficientes esta semana.</Text>
-            ) : (
-              <View style={{ marginTop: 10, gap: 8 }}>
-                {insights!.top_triggers.map((t) => (
-                  <View key={t.trigger} style={s.triggerRow}>
-                    <Text style={s.triggerText}>{t.trigger}</Text>
-                    <Text style={s.triggerCount}>{t.count}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
+      <Text style={styles.feedback}>{feedbackMessage}</Text>
 
-          {/* Recomendação da semana */}
-          <View style={s.card}>
-            <Text style={s.cardTitle}>Recomendação da semana</Text>
+      {/* 📊 gráfico */}
+      <Animated.View entering={FadeInUp.delay(200)}>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Resumo emocional</Text>
 
-            {!rec ? (
-              <Text style={s.muted}>Sem recomendação disponível.</Text>
-            ) : (
-              <>
-                <Text style={s.recTitle}>{rec.title}</Text>
-                <Text style={s.muted}>
-                  {rec.type ? `Tipo: ${rec.type}` : ""}{rec.duration_minutes ? ` • ${rec.duration_minutes} min` : ""}
-                </Text>
-                {rec.description ? <Text style={[s.muted, { marginTop: 8 }]}>{rec.description}</Text> : null}
+          <BarChart
+  data={barData}
+  width={screenWidth - 40}
+  height={180}
+  fromZero
+  yAxisLabel=""
+  yAxisSuffix=""
+  chartConfig={{
+    backgroundGradientFrom: "transparent",
+    backgroundGradientTo: "transparent",
+    decimalPlaces: 0,
+    color: () => "#2dd4bf",
+    labelColor: () => "#94A3B8",
 
-                {rec.url ? (
-                  <Pressable
-  style={s.btnPrimary}
-  onPress={() => {
-    router.push({
-      pathname: "/resource-detail",
-      params: {
-        title: rec.title,
-        description: rec.description,
-        author: rec.author,
-        type: rec.type,
-        duration: String(rec.duration_minutes ?? ""),
-        url: rec.url ?? "",
-        tags: rec.tags?.join(",") ?? "",
-      },
-    });
+    propsForBackgroundLines: {
+      stroke: "transparent",
+    },
   }}
->
-                    <Text style={s.btnPrimaryText}>Abrir</Text>
-                  </Pressable>
-                ) : (
-                  <View style={s.alertBox}>
-                    <Text style={s.alertText}>
-                      Esse recurso não tem link — é um exercício interno. Você pode mostrar o texto aqui (ou criar uma tela “Detalhe do recurso”).
-                    </Text>
-                  </View>
-                )}
-              </>
-            )}
+  style={{ borderRadius: 12 }}
+/>
+
+          <View style={{ marginTop: 12 }}>
+            <Text style={styles.text}>😊 Bons: {moodStats.good}</Text>
+            <Text style={styles.text}>😐 Neutros: {moodStats.neutral}</Text>
+            <Text style={styles.text}>😞 Ruins: {moodStats.bad}</Text>
           </View>
-        </>
-      )}
+        </View>
+      </Animated.View>
+
+      {/* 📅 calendário */}
+      <Animated.View entering={FadeInUp.delay(300)}>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Seu mês</Text>
+          <MoodCalendar data={filteredHistory} />
+        </View>
+      </Animated.View>
+
+      {/* 📋 histórico */}
+      <TouchableOpacity
+        style={styles.button}
+        onPress={() => setShowHistory(true)}
+      >
+        <Text style={styles.buttonText}>Ver histórico</Text>
+      </TouchableOpacity>
+
+      {/* 📦 modal */}
+      <Modal visible={showHistory} animationType="slide">
+        <View style={styles.modalContainer}>
+          <Text style={styles.title}>Histórico completo</Text>
+
+          <ScrollView>
+            {history.map((item, index) => (
+              <View key={index} style={styles.historyItem}>
+                <Text style={styles.text}>
+                  {item.date} → nível {item.level}
+                </Text>
+              </View>
+            ))}
+          </ScrollView>
+
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={() => setShowHistory(false)}
+          >
+            <Text style={styles.buttonText}>Fechar</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: "#0b0f1a" },
-  title: { fontSize: 26, fontWeight: "900", color: "#e7ecff", marginTop: 8 },
-  subtitle: { color: "#9aa6c3", marginTop: 6 },
-
-  rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#060912",
+    padding: 16,
+  },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  title: {
+    color: "#E2E8F0",
+    fontSize: 26,
+    fontWeight: "800",
+    marginBottom: 16,
+  },
+  filterRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 12,
+  },
+  filterButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  filterActive: {
+    backgroundColor: "rgba(45,212,191,0.25)",
+  },
+  filterText: {
+    color: "#CBD5F5",
+  },
+  row: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  metricCard: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    alignItems: "center",
+  },
+  metricValue: {
+    color: "#2dd4bf",
+    fontSize: 24,
+    fontWeight: "800",
+  },
+  metricLabel: {
+    color: "#94A3B8",
+  },
+  feedback: {
+    marginTop: 12,
+    color: "#94A3B8",
+    textAlign: "center",
+  },
   card: {
     marginTop: 14,
+    padding: 16,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.03)",
+  },
+  cardTitle: {
+    color: "#2dd4bf",
+    fontWeight: "700",
+    marginBottom: 10,
+  },
+  text: {
+    color: "#CBD5E1",
+  },
+  button: {
+    marginTop: 16,
     padding: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,.10)",
-    backgroundColor: "rgba(255,255,255,.03)",
-  },
-  cardTitle: { color: "#e7ecff", fontWeight: "800", fontSize: 16 },
-
-  muted: { color: "#9aa6c3", marginTop: 6, lineHeight: 18 },
-
-  badge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
-  badgeText: { color: "#e7ecff", fontWeight: "900", fontSize: 12 },
-  badgeHigh: { borderColor: "rgba(255,90,90,.7)", backgroundColor: "rgba(255,90,90,.12)" },
-  badgeMid: { borderColor: "rgba(255,200,80,.7)", backgroundColor: "rgba(255,200,80,.12)" },
-  badgeLow: { borderColor: "rgba(45,212,191,.7)", backgroundColor: "rgba(45,212,191,.10)" },
-  badgeUnknown: { borderColor: "rgba(255,255,255,.18)", backgroundColor: "rgba(255,255,255,.06)" },
-
-  alertBox: {
-    marginTop: 10,
-    padding: 12,
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,.10)",
-    backgroundColor: "rgba(255,255,255,.04)",
-  },
-  alertWarn: { borderColor: "rgba(255,200,80,.35)", backgroundColor: "rgba(255,200,80,.06)" },
-  alertCritical: { borderColor: "rgba(255,90,90,.35)", backgroundColor: "rgba(255,90,90,.06)" },
-
-  alertCriticalBox: {
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255,90,90,.35)",
-    backgroundColor: "rgba(255,90,90,.06)",
-  },
-  alertTitle: { color: "#e7ecff", fontWeight: "900" },
-  alertText: { color: "#9aa6c3", marginTop: 6, lineHeight: 18 },
-
-  btnPrimary: {
-    marginTop: 12,
     backgroundColor: "#2dd4bf",
-    borderRadius: 12,
-    paddingVertical: 12,
     alignItems: "center",
   },
-  btnPrimaryText: { color: "#08101a", fontWeight: "900" },
-
-  btnGhost: {
-    marginTop: 10,
-    borderRadius: 12,
-    paddingVertical: 12,
+  buttonText: {
+    color: "#02120F",
+    fontWeight: "800",
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: "#060912",
+    padding: 16,
+  },
+  historyItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.05)",
+  },
+  closeButton: {
+    marginTop: 16,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: "#E91E63",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,.12)",
   },
-  btnGhostText: { color: "#e7ecff", fontWeight: "800" },
-
-  // gráfico simples
-  chartWrap: { marginTop: 12, flexDirection: "row", gap: 10, alignItems: "flex-end" },
-  chartCol: { width: 34, alignItems: "center" },
-  chartTrack: {
-    width: 18,
-    height: 90,
-    borderRadius: 10,
-    backgroundColor: "rgba(255,255,255,.06)",
-    overflow: "hidden",
-    justifyContent: "flex-end",
-  },
-  chartBar: {
-    width: "100%",
-    borderRadius: 10,
-    backgroundColor: "rgba(45,212,191,.85)",
-  },
-  chartLabel: { color: "#9aa6c3", marginTop: 6, fontSize: 12 },
-
-  // triggers
-  triggerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,.10)",
-    backgroundColor: "rgba(255,255,255,.04)",
-  },
-  triggerText: { color: "#e7ecff", fontWeight: "800" },
-  triggerCount: { color: "#9aa6c3", fontWeight: "900" },
-
-  // recomendação
-  recTitle: { color: "#e7ecff", fontWeight: "900", fontSize: 16, marginTop: 10 },
 });

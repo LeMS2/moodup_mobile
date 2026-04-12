@@ -1,15 +1,15 @@
+import { api } from "@/services/api";
+import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  View,
-  Text,
-  ScrollView,
-  Pressable,
-  StyleSheet,
-  Linking,
-  ActivityIndicator,
+    ActivityIndicator,
+    Linking,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
-import { api } from "@/src/services/api";
-import { useRouter } from "expo-router";
 
 type Mood = {
   id: number;

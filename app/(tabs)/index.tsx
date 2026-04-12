@@ -1,40 +1,36 @@
+import { useEffect } from "react";
 import { Image } from "expo-image";
-import { StyleSheet, View, Text, Pressable } from "react-native";
+import { StyleSheet, View, Text, Pressable, Alert } from "react-native";
 import { useRouter } from "expo-router";
 
 export default function HomeScreen() {
   const router = useRouter();
 
+  useEffect(() => {
+    console.log("✅ TELA MOODS CARREGADA COM SUCESSO!");
+    Alert.alert("Sucesso", "Você está dentro do app!");
+  }, []);
+
   function handleLogout() {
-    router.replace("/(auth)/welcome" as any);
+    router.replace("/(auth)/welcome");
   }
 
   return (
     <View style={styles.container}>
-      {/* IMAGEM */}
       <Image
         source={require("@/assets/images/imagem_moodup.jpeg")}
         style={styles.image}
         contentFit="cover"
       />
 
-      {/* CONTEÚDO */}
       <View style={styles.content}>
         <Text style={styles.title}>MoodUp</Text>
-
-        <Text style={styles.subtitle}>
-          Seu diário de apoio emocional
-        </Text>
-
-        <Text style={styles.bigText}>
-          Aqui você pode pausar, refletir e cuidar do que sente.
-        </Text>
-
+        <Text style={styles.subtitle}>Seu diário de apoio emocional</Text>
+        <Text style={styles.bigText}>Aqui você pode pausar, refletir e cuidar do que sente.</Text>
         <Text style={styles.description}>
           Registre seus humores, acompanhe sua evolução ao longo do tempo e encontre apoio nos momentos mais difíceis.
         </Text>
 
-        {/* BOTÃO SAIR */}
         <Pressable
           style={({ pressed }) => [
             styles.logoutButton,

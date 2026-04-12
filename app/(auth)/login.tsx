@@ -59,7 +59,7 @@ export default function Login() {
         );
 
       if (acceptedTerms) {
-        router.replace("/(tabs)/moods" as any);
+        router.replace("/(tabs)" as any);
       } else {
         router.replace("/terms?mode=auth" as any);
       }

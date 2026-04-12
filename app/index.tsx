@@ -1,46 +1,17 @@
-import { useEffect } from "react";
-import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { api } from "@/src/services/api";
-
-const TOKEN_KEY = "token";
+import { useEffect } from "react";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
 
 export default function Index() {
   const router = useRouter();
 
   useEffect(() => {
-    async function checkAuth() {
-      try {
-        const token = await AsyncStorage.getItem(TOKEN_KEY);
+    // Pequeno delay para garantir que o layout está pronto
+    const timeoutId = setTimeout(() => {
+      router.replace("/(auth)/welcome");
+    }, 100);
 
-        if (!token) {
-          router.replace("/(auth)/welcome" as any);
-          return;
-        }
-
-        api.defaults.headers.common.Authorization = `Bearer ${token}`;
-
-        const res = await api.get("/me");
-
-        const accepted = Boolean(
-          res.data?.accepted_terms ??
-          !!res.data?.user?.accepted_terms_at
-        );
-
-        if (accepted) {
-          router.replace("/(tabs)/moods" as any);
-        } else {
-          router.replace("/terms?mode=auth" as any);
-        }
-      } catch (error) {
-        await AsyncStorage.removeItem(TOKEN_KEY);
-        delete api.defaults.headers.common.Authorization;
-        router.replace("/(auth)/welcome" as any);
-      }
-    }
-
-    checkAuth();
+    return () => clearTimeout(timeoutId);
   }, [router]);
 
   return (

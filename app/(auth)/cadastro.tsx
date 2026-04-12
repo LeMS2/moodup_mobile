@@ -22,7 +22,7 @@ function firstLaravelError(data: any) {
   return firstMsg || null;
 }
 
-// 🔥 regex simples e eficiente pra email
+// regex simples e eficiente pra email
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -30,8 +30,6 @@ function isValidEmail(email: string) {
 export default function Cadastro() {
   const router = useRouter();
   const { fresh } = useLocalSearchParams<{ fresh?: string }>();
-
-  const alreadyTriedAutoRegister = useRef(false);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -49,46 +47,26 @@ export default function Cadastro() {
           await AsyncStorage.removeItem(LOCAL_TERMS_KEY);
           await AsyncStorage.removeItem(REGISTER_DRAFT_KEY);
           setAcceptedTerms(false);
-          alreadyTriedAutoRegister.current = false;
           return;
         }
 
         const accepted = await AsyncStorage.getItem(LOCAL_TERMS_KEY);
         setAcceptedTerms(accepted === "true");
-
-        // 🔥 AUTO CADASTRO
-        if (accepted === "true" && !alreadyTriedAutoRegister.current) {
-          const draftRaw = await AsyncStorage.getItem(REGISTER_DRAFT_KEY);
-
-          if (draftRaw) {
-            alreadyTriedAutoRegister.current = true;
-
-            const draft = JSON.parse(draftRaw);
-
-            setName(draft.name);
-            setEmail(draft.email);
-            setPassword(draft.password);
-            setPasswordConfirmation(draft.password_confirmation);
-
-            handleCadastro(draft);
-          }
-        }
       }
 
       prepareTermsFlag();
     }, [fresh])
   );
 
-  async function handleCadastro(draftData?: any) {
+  async function handleCadastro() {
     setErro("");
 
-    const nameClean = (draftData?.name ?? name).trim();
-    const emailClean = (draftData?.email ?? email).trim().toLowerCase();
-    const passClean = (draftData?.password ?? password).trim();
-    const passConfClean = (draftData?.password_confirmation ?? passwordConfirmation).trim();
+    const nameClean = name.trim();
+    const emailClean = email.trim().toLowerCase();
+    const passClean = password.trim();
+    const passConfClean = passwordConfirmation.trim();
 
-    // 🔥 VALIDAÇÕES
-
+    // VALIDAÇÕES
     if (!nameClean) {
       setErro("Informe seu nome.");
       return;
@@ -127,6 +105,7 @@ export default function Cadastro() {
     const accepted = await AsyncStorage.getItem(LOCAL_TERMS_KEY);
 
     if (accepted !== "true") {
+      // Salva rascunho e vai para termos
       await AsyncStorage.setItem(
         REGISTER_DRAFT_KEY,
         JSON.stringify({
@@ -137,7 +116,7 @@ export default function Cadastro() {
         })
       );
 
-      router.push("/terms?mode=cadastro" as any);
+      router.push("/terms?mode=cadastro");
       return;
     }
 
@@ -165,11 +144,11 @@ export default function Cadastro() {
 
         api.defaults.headers.common.Authorization = `Bearer ${token}`;
 
-        router.replace("/(tabs)/moods" as any);
+        router.replace("/(tabs)" as any);
         return;
       }
 
-      router.replace("/(auth)/login" as any);
+      router.replace("/(auth)/login");
     } catch (e: any) {
       const laravelMsg = firstLaravelError(e?.response?.data);
 

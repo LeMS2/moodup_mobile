@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Linking } from "react-native";
-import { api } from "../../../src/services/api";
+import { api } from "@/services/api";
 
 const MOODS = [
   { key: "muito_triste", emoji: "😞", label: "Muito mal" },
@@ -106,7 +106,7 @@ export default function CreateMood() {
   triggers: selectedTriggers,
 });
 
-      router.replace("/(tabs)/moods" as any);
+      router.replace("/(tabs)" as any);
     } catch (e: any) {
       setErro(
         e?.response?.data?.message ||
