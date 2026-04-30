@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Image } from "expo-image";
-import { StyleSheet, View, Text, Pressable, Alert } from "react-native";
+import { StyleSheet, View, Text, Alert } from "react-native";
 import { useRouter } from "expo-router";
 
 export default function HomeScreen() {
@@ -11,10 +11,6 @@ export default function HomeScreen() {
     Alert.alert("Sucesso", "Você está dentro do app!");
   }, []);
 
-  function handleLogout() {
-    router.replace("/(auth)/welcome");
-  }
-
   return (
     <View style={styles.container}>
       <Image
@@ -24,22 +20,20 @@ export default function HomeScreen() {
       />
 
       <View style={styles.content}>
-        <Text style={styles.title}>MoodUp</Text>
-        <Text style={styles.subtitle}>Seu diário de apoio emocional</Text>
-        <Text style={styles.bigText}>Aqui você pode pausar, refletir e cuidar do que sente.</Text>
-        <Text style={styles.description}>
-          Registre seus humores, acompanhe sua evolução ao longo do tempo e encontre apoio nos momentos mais difíceis.
-        </Text>
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.logoutButton,
-            pressed && { opacity: 0.85 },
-          ]}
-          onPress={handleLogout}
-        >
-          <Text style={styles.logoutText}>Sair</Text>
-        </Pressable>
+        <View style={styles.centerContent}>
+          <Text style={styles.title}>MoodUp</Text>
+          <Text style={styles.subtitle}>Seu diário de apoio emocional</Text>
+          
+          <View style={styles.messageBox}>
+            <Text style={styles.bigText}>
+              Aqui você pode pausar, refletir e cuidar do que sente.
+            </Text>
+            <Text style={styles.description}>
+              Registre seus humores, acompanhe sua evolução ao longo do tempo 
+              e encontre apoio nos momentos mais difíceis.
+            </Text>
+          </View>
+        </View>
       </View>
     </View>
   );
@@ -58,25 +52,40 @@ const styles = StyleSheet.create({
 
   content: {
     flex: 1,
-    padding: 20,
+    padding: 24,
     marginTop: -40,
     backgroundColor: "#0F172A",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
   },
 
+  centerContent: {
+    flex: 1,
+    justifyContent: "center",
+  },
+
   title: {
     color: "#E5E7EB",
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: "800",
     marginBottom: 8,
+    textAlign: "center",
   },
 
   subtitle: {
     color: "#2dd4bf",
     fontSize: 16,
     fontWeight: "600",
-    marginBottom: 12,
+    marginBottom: 32,
+    textAlign: "center",
+  },
+
+  messageBox: {
+    backgroundColor: "rgba(45, 212, 191, 0.08)",
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "rgba(45, 212, 191, 0.15)",
   },
 
   bigText: {
@@ -85,25 +94,13 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     lineHeight: 26,
     marginBottom: 16,
+    textAlign: "center",
   },
 
   description: {
     color: "#94A3B8",
     fontSize: 14,
     lineHeight: 22,
-    marginBottom: 28,
-  },
-
-  logoutButton: {
-    backgroundColor: "#6d5efc", // azul/roxo igual botão anterior
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: "center",
-  },
-
-  logoutText: {
-    color: "#FFFFFF",
-    fontWeight: "800",
-    fontSize: 15,
+    textAlign: "center",
   },
 });

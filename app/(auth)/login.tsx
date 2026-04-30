@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
 import { Link, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api } from "../../src/services/api";
+import { Ionicons } from "@expo/vector-icons"; // ← ícones
 
 const TOKEN_KEY = "token";
 
@@ -11,6 +12,7 @@ export default function Login() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false); // ← novo
 
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
@@ -92,14 +94,26 @@ export default function Login() {
         />
 
         <Text style={styles.label}>Senha</Text>
-        <TextInput
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          placeholder="••••••••"
-          placeholderTextColor="#6B7280"
-          style={styles.input}
-        />
+        <View style={styles.passwordContainer}>
+          <TextInput
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+            placeholder="••••••••"
+            placeholderTextColor="#6B7280"
+            style={[styles.input, styles.passwordInput]}
+          />
+          <Pressable
+            onPress={() => setShowPassword(!showPassword)}
+            style={styles.eyeIcon}
+          >
+            <Ionicons
+              name={showPassword ? "eye-off" : "eye"}
+              size={22}
+              color="#94A3B8"
+            />
+          </Pressable>
+        </View>
 
         {erro ? <Text style={styles.errorText}>{erro}</Text> : null}
 
@@ -174,6 +188,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     color: "#E5E7EB",
+  },
+  passwordContainer: {
+    position: "relative",
+  },
+  passwordInput: {
+    paddingRight: 45,
+  },
+  eyeIcon: {
+    position: "absolute",
+    right: 14,
+    top: "50%",
+    transform: [{ translateY: -11 }],
   },
   errorText: {
     color: "#ff6b6b",

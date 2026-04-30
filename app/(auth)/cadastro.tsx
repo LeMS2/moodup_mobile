@@ -8,6 +8,7 @@ import {
 } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api } from "../../src/services/api";
+import { Ionicons } from "@expo/vector-icons"; // ← ícones
 
 const TOKEN_KEY = "token";
 const LOCAL_TERMS_KEY = "accepted_terms_local";
@@ -22,7 +23,6 @@ function firstLaravelError(data: any) {
   return firstMsg || null;
 }
 
-// regex simples e eficiente pra email
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -36,6 +36,10 @@ export default function Cadastro() {
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+
+  // 👁️ States para mostrar/ocultar senha
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
@@ -66,7 +70,6 @@ export default function Cadastro() {
     const passClean = password.trim();
     const passConfClean = passwordConfirmation.trim();
 
-    // VALIDAÇÕES
     if (!nameClean) {
       setErro("Informe seu nome.");
       return;
@@ -105,7 +108,6 @@ export default function Cadastro() {
     const accepted = await AsyncStorage.getItem(LOCAL_TERMS_KEY);
 
     if (accepted !== "true") {
-      // Salva rascunho e vai para termos
       await AsyncStorage.setItem(
         REGISTER_DRAFT_KEY,
         JSON.stringify({
@@ -192,24 +194,48 @@ export default function Cadastro() {
         />
 
         <Text style={styles.label}>Senha</Text>
-        <TextInput
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          placeholder="mínimo 8 caracteres"
-          placeholderTextColor="#6B7280"
-          style={styles.input}
-        />
+        <View style={styles.passwordContainer}>
+          <TextInput
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+            placeholder="mínimo 8 caracteres"
+            placeholderTextColor="#6B7280"
+            style={[styles.input, styles.passwordInput]}
+          />
+          <Pressable
+            onPress={() => setShowPassword(!showPassword)}
+            style={styles.eyeIcon}
+          >
+            <Ionicons
+              name={showPassword ? "eye-off" : "eye"}
+              size={22}
+              color="#94A3B8"
+            />
+          </Pressable>
+        </View>
 
         <Text style={styles.label}>Confirmar senha</Text>
-        <TextInput
-          value={passwordConfirmation}
-          onChangeText={setPasswordConfirmation}
-          secureTextEntry
-          placeholder="repita a senha"
-          placeholderTextColor="#6B7280"
-          style={styles.input}
-        />
+        <View style={styles.passwordContainer}>
+          <TextInput
+            value={passwordConfirmation}
+            onChangeText={setPasswordConfirmation}
+            secureTextEntry={!showConfirmPassword}
+            placeholder="repita a senha"
+            placeholderTextColor="#6B7280"
+            style={[styles.input, styles.passwordInput]}
+          />
+          <Pressable
+            onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+            style={styles.eyeIcon}
+          >
+            <Ionicons
+              name={showConfirmPassword ? "eye-off" : "eye"}
+              size={22}
+              color="#94A3B8"
+            />
+          </Pressable>
+        </View>
 
         <Link
           href="/terms?mode=cadastro"
@@ -286,6 +312,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     color: "#E5E7EB",
+  },
+  passwordContainer: {
+    position: "relative",
+  },
+  passwordInput: {
+    paddingRight: 45,
+  },
+  eyeIcon: {
+    position: "absolute",
+    right: 14,
+    top: "50%",
+    transform: [{ translateY: -11 }],
   },
   errorText: {
     color: "#ff6b6b",
